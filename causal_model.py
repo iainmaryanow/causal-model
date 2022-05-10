@@ -1,57 +1,9 @@
 from scipy.stats import pearsonr
 import itertools
 
-
-
-
-# def build_causal_graph(data, independence_threshold=0.1):
-#   # IC Algorithm
-
-#   graph = []
-
-#   # 1.
-
-#   variables = range(len(data[0]))
-
-#   for variable_1 in variables:
-#     graph.append([])
-
-#     for variable_2 in variables:
-#       correlation = _calculate_pearson([variable_1, variable_2], data)
-#       is_dependent = variable_1 != variable_2 and abs(correlation) >= independence_threshold
-#       graph[variable_1].append(is_dependent)
-
-
-#   # 2.
-
-#   for variable_1 in variables:
-#     for variable_2 in variables[variable_1+1:]:
-#       for conditioned_variable in variables:
-#         if conditioned_variable != variable_1 and conditioned_variable != variable_2:
-#           correlation = _compute_correlation([variable_1, variable_2], [conditioned_variable], data)
-#           is_not_adjacent = graph[variable_1][variable_2] == False
-#           if is_not_adjacent and abs(correlation) >= independence_threshold:
-#             graph[variable_1][conditioned_variable] = True
-#             graph[conditioned_variable][variable_1] = False
-#             graph[variable_2][conditioned_variable] = True
-#             graph[conditioned_variable][variable_2] = False
-
-  # 3.
-
-
-
-
-
-
-
-
-
-
-
+ARROW_FLAG = 'arrow'
 
 def build_causal_graph(data, independence_threshold=0.1):
-  # PC Algorithm
-
   variables = list(range(len(data[0])))
 
   graph = []
@@ -72,12 +24,7 @@ def build_causal_graph(data, independence_threshold=0.1):
 
       for z in itertools.combinations(z_candidates, N):
         correlation = _compute_correlation([x, y], list(z), data)
-
-        if (x in [1, 3] and y in [1, 3]) or (x in [2, 3] and y in [2, 3]):
-          continue
-
-        has_set = (x, y) in separating_sets
-        if not has_set and abs(correlation) <= independence_threshold:
+        if not (x, y) in separating_sets and abs(correlation) <= independence_threshold:
           graph[x][y] = False
           graph[y][x] = False
           separating_sets[(x, y)] = z
@@ -101,6 +48,7 @@ def build_causal_graph(data, independence_threshold=0.1):
 
   return graph, marked
 
+
 def adjacent(x, graph):
   adjs = set()
   for i in range(len(graph)):
@@ -108,31 +56,35 @@ def adjacent(x, graph):
       adjs.add(i)
     if graph[x][i] != False:
       adjs.add(i)
+
   return adjs
 
 
 def edges(graph):
-  e = set()
+  edge_set = set()
   for i in range(len(graph)):
     for j in range(len(graph)):
       if graph[i][j] != False:
-        e.add(tuple(sorted((i, j))))
-  return e
+        edge_set.add(tuple(sorted((i, j))))
+
+  return edge_set
 
 
 def _apply_recursion_rule_1(graph, marked):
   added_arrows = False
+
   for c in range(len(graph[0])):
     for a, b in itertools.combinations(adjacent(c, graph), 2):
       if not graph[a][b]:
         if arrow(a, c, graph) and not arrow(b, c, graph) and not (arrow(c, b, graph) and marked[b][c]):
-          graph[c][b] = 'arrow'
+          graph[c][b] = ARROW_FLAG
           graph[b][c] = False
           marked[c][b] = True
           marked[b][c] = True
           added_arrows = True
+
         if arrow(b, c, graph) and not arrow(a, c, graph) and not (arrow(c, a, graph) and marked[a][c]):
-          graph[c][a] = 'arrow'
+          graph[c][a] = ARROW_FLAG
           graph[a][c] = False
           marked[c][a] = True
           marked[a][c] = True
@@ -140,37 +92,35 @@ def _apply_recursion_rule_1(graph, marked):
 
   return added_arrows
 
+
 def _apply_recursion_rule_2(graph, marked):
   added_arrows = False
   for a, b in edges(graph):
-    if graph[a][b] != 'arrow':
-      if _marked_directed_path(a, b, graph):
-        graph[a][b] = 'arrow'
-        added_arrows = True
+    if graph[a][b] != ARROW_FLAG and _marked_directed_path(a, b, graph):
+      graph[a][b] = ARROW_FLAG
+      added_arrows = True
+
   return added_arrows
 
+
 def arrow(src, dest, graph):
-  return graph[src][dest] == 'arrow'
+  return graph[src][dest] == ARROW_FLAG
+
 
 def _marked_directed_path(a, b, graph):
   seen = [a]
   neighbors = [(a, neighbor) for neighbor in adjacent(a, graph)]
+
   while neighbors:
     parent, child = neighbors.pop()
-    if graph[parent][child] == 'arrow' and marked[parent][child]:
+    if graph[parent][child] == ARROW_FLAG and marked[parent][child]:
       if child == b:
         return True
       if child not in seen:
         neighbors += [(child, neighbor) for neighbor in adjacent(child, graph)]
       seen.append(child)
+
   return False
-
-
-
-
-
-
-
 
 
 def is_feasible_causal_graph(causal_graph, data, independence_threshold=0.1):
@@ -178,6 +128,7 @@ def is_feasible_causal_graph(causal_graph, data, independence_threshold=0.1):
   for statement in basis_set:
     if not _is_valid_d_separation_statement(statement[0], statement[1], data, independence_threshold):
       return False
+
   return True
 
 
@@ -197,6 +148,7 @@ def _get_non_adjacent_pairs(causal_graph):
     for j in range(i+1, len(causal_graph)):
       if not causal_graph[i][j] and not causal_graph[j][i]:
         non_adjacent_pairs.append((i, j))
+
   return non_adjacent_pairs
 
 
@@ -209,6 +161,7 @@ def _get_causal_parents(non_adjacent_pairs, causal_graph):
       if causal_graph[index][variable1] or causal_graph[index][variable2]:
         parents.append(index)
     causal_parents.append(parents)
+
   return causal_parents
 
 
@@ -218,6 +171,7 @@ def _build_d_separation_statements(non_adjacent_pairs, causal_parents):
   for index, pair in enumerate(non_adjacent_pairs):
     statement = (pair, causal_parents[index])
     d_separation_statements.append(statement)
+
   return d_separation_statements
 
 
